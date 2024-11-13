@@ -1,0 +1,18 @@
+[package]
+name = "ta-agi-doorbell"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1.83"
+blazing_agi = "0.3.0"
+blazing_agi_macros = "0.1.0"
+coe = "0.2.2"
+hex = "0.4.3"
+rand = "0.8.5"
+serde = { version = "1.0.215", features = ["derive"] }
+sha1 = "0.10.6"
+tokio = { version = "1.41.1", features = ["rt-multi-thread", "net", "macros"]}
+toml = "0.8.19"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["time", "fmt", "env-filter"] }
