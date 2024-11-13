@@ -1,0 +1,11 @@
+[agi]
+listen_address = "0.0.0.0"
+listen_port = 5743
+digest_secret = "TODO"
+
+[[cmi.room_mappings]]
+room_name = "zb"
+cmi_address = "192.168.2.123"
+virtual_node = 12
+pdo = 3
+

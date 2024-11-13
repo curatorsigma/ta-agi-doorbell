@@ -3,7 +3,7 @@ use blazing_agi_macros::layer_before;
 use rand::Rng;
 use sha1::{Digest, Sha1};
 use tokio::net::TcpListener;
-use tracing::level_filters::LevelFilter;
+use tracing::{debug, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, EnvFilter};
 
 mod config;
@@ -85,6 +85,7 @@ impl AGIHandler for SHA1DigestOverAGI {
                             AGIError::InnerError(Box::new(SHA1DigestError::DecodeError))
                         })?
                     {
+                        warn!("Got AGI request, but the Client could not authenticate.");
                         connection
                             .send_command(Verbose::new(
                                 "Unauthenticated: Wrong Digest.".to_string(),
@@ -120,12 +121,14 @@ impl OpenDoorHandler {
 #[async_trait::async_trait]
 impl AGIHandler for OpenDoorHandler {
     async fn handle(&self, connection: &mut Connection, request: &AGIRequest) -> Result<(), AGIError> {
+        debug!("Got new AGI request to the open_door handler.");
         // make sure the room is known
         let room = request.captures.get("room").ok_or(AGIError::ClientSideError("Got no captured room".to_owned()))?;
         // get the cmi connection used for this room
         connection.send_command(Verbose::new(format!("The room {room} is not known."))).await?;
         let cmi_config = self.get_cmi_for_room(room).ok_or(AGIError::ClientSideError("Room is not known.".to_owned()))?;
         // send ON to that CMI
+        info!("Opening Door {}", cmi_config.room_name);
         cmi_config.open_door().await.map_err(|x| AGIError::ClientSideError(x.to_string()))?;
         Ok(())
     }
@@ -134,7 +137,7 @@ impl AGIHandler for OpenDoorHandler {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create the logger
-    let my_crate_filter = EnvFilter::new("ta_agi_doorbell");
+    let my_crate_filter = EnvFilter::new("ta_agi_doorbell,blazing_agi");
     let subscriber = tracing_subscriber::registry().with(my_crate_filter).with(
         tracing_subscriber::fmt::layer()
             .compact()
@@ -148,6 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::create()?;
     let digest_secret = config.agi_digest_secret();
     let agi_listen_string = config.agi_listen_string();
+    debug!("Successfully created the config");
 
     // Create the router from the handlers you have defined
     let router = Router::new()
@@ -155,6 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(layer_before!(SHA1DigestOverAGI::new(digest_secret)));
 
     let listener = TcpListener::bind(agi_listen_string).await?;
+    info!("Starting ta-agi-doorbell service");
     // Start serving the Router
     serve::serve(listener, router).await?;
     Ok(())

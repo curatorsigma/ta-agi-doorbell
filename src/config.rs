@@ -166,7 +166,7 @@ struct CmiConfigData {
 /// Mapping a single room to a destination in TA
 #[derive(Debug, PartialEq, Eq)]
 pub struct RoomMapping {
-    room_name: String,
+    pub room_name: String,
     cmi_address: Ipv4Addr,
     cmi_port: u16,
     virtual_node: u8,
