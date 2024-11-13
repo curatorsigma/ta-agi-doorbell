@@ -7,7 +7,7 @@ use tracing::{debug, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, EnvFilter};
 
 mod config;
-use config::{CmiConfig, Config, RoomMapping};
+use config::{CmiConfig, Config, DoorMapping};
 
 
 
@@ -114,21 +114,21 @@ struct OpenDoorHandler {
     config: CmiConfig,
 }
 impl OpenDoorHandler {
-    fn get_cmi_for_room<S: AsRef<str>>(&self, room_name: S) -> Option<&RoomMapping> {
-        self.config.get_cmi_for_room(room_name.as_ref())
+    fn get_cmi_for_door<S: AsRef<str>>(&self, door_name: S) -> Option<&DoorMapping> {
+        self.config.get_cmi_for_door(door_name.as_ref())
     }
 }
 #[async_trait::async_trait]
 impl AGIHandler for OpenDoorHandler {
     async fn handle(&self, connection: &mut Connection, request: &AGIRequest) -> Result<(), AGIError> {
         debug!("Got new AGI request to the open_door handler.");
-        // make sure the room is known
-        let room = request.captures.get("room").ok_or(AGIError::ClientSideError("Got no captured room".to_owned()))?;
-        // get the cmi connection used for this room
-        connection.send_command(Verbose::new(format!("The room {room} is not known."))).await?;
-        let cmi_config = self.get_cmi_for_room(room).ok_or(AGIError::ClientSideError("Room is not known.".to_owned()))?;
+        // make sure the door is known
+        let door = request.captures.get("door").ok_or(AGIError::ClientSideError("Got no captured door".to_owned()))?;
+        // get the cmi connection used for this door
+        connection.send_command(Verbose::new(format!("The door {door} is not known."))).await?;
+        let cmi_config = self.get_cmi_for_door(door).ok_or(AGIError::ClientSideError("Door is not known.".to_owned()))?;
         // send ON to that CMI
-        info!("Opening Door {}", cmi_config.room_name);
+        info!("Opening Door {}", cmi_config.door_name);
         cmi_config.open_door().await.map_err(|x| AGIError::ClientSideError(x.to_string()))?;
         Ok(())
     }
@@ -155,7 +155,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create the router from the handlers you have defined
     let router = Router::new()
-        .route("/open_door/:room", OpenDoorHandler { config: config.cmi })
+        .route("/open_door/:door", OpenDoorHandler { config: config.cmi })
         .layer(layer_before!(SHA1DigestOverAGI::new(digest_secret)));
 
     let listener = TcpListener::bind(agi_listen_string).await?;

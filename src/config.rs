@@ -44,16 +44,16 @@ impl core::fmt::Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 #[derive(Debug)]
-pub enum RoomOpenError {
+pub enum DoorOpenError {
     CannotBindSocket,
     CannotSendCoe(std::io::Error),
 }
-impl From<std::io::Error> for RoomOpenError {
+impl From<std::io::Error> for DoorOpenError {
     fn from(value: std::io::Error) -> Self {
         Self::CannotSendCoe(value)
     }
 }
-impl core::fmt::Display for RoomOpenError {
+impl core::fmt::Display for DoorOpenError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::CannotBindSocket => {
@@ -65,7 +65,7 @@ impl core::fmt::Display for RoomOpenError {
         }
     }
 }
-impl std::error::Error for RoomOpenError {}
+impl std::error::Error for DoorOpenError {}
 
 /// The entire configuration for ta-agi-doorbell
 #[derive(Debug)]
@@ -133,24 +133,24 @@ impl From<AgiConfigData> for AgiConfig {
     }
 }
 
-/// Mappings for all rooms
+/// Mappings for all doors
 #[derive(Debug, PartialEq, Eq)]
 pub struct CmiConfig {
-    room_mappings: Vec<RoomMapping>,
+    door_mappings: Vec<DoorMapping>,
 }
 impl TryFrom<CmiConfigData> for CmiConfig {
     type Error = PdoZeroError;
 
     fn try_from(value: CmiConfigData) -> Result<Self, Self::Error> {
         Ok(Self {
-            room_mappings: value.room_mappings.into_iter().map(|x| <RoomMappingData as TryInto<RoomMapping>>::try_into(x)).collect::<Result<Vec<_>, _>>()?,
+            door_mappings: value.door_mappings.into_iter().map(|x| <DoorMappingData as TryInto<DoorMapping>>::try_into(x)).collect::<Result<Vec<_>, _>>()?,
         })
     }
 }
 impl CmiConfig {
-    pub fn get_cmi_for_room(&self, name: &str) -> Option<&RoomMapping> {
-        for map in &self.room_mappings {
-            if map.room_name == name {
+    pub fn get_cmi_for_door(&self, name: &str) -> Option<&DoorMapping> {
+        for map in &self.door_mappings {
+            if map.door_name == name {
                 return Some(&map);
             }
         };
@@ -160,21 +160,21 @@ impl CmiConfig {
 
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 struct CmiConfigData {
-    room_mappings: Vec<RoomMappingData>,
+    door_mappings: Vec<DoorMappingData>,
 }
 
-/// Mapping a single room to a destination in TA
+/// Mapping a single door to a destination in TA
 #[derive(Debug, PartialEq, Eq)]
-pub struct RoomMapping {
-    pub room_name: String,
+pub struct DoorMapping {
+    pub door_name: String,
     cmi_address: Ipv4Addr,
     cmi_port: u16,
     virtual_node: u8,
     pdo: u8,
 }
-impl RoomMapping {
-    pub async fn open_door(&self) -> Result<(), RoomOpenError> {
-        let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|_| RoomOpenError::CannotBindSocket)?;
+impl DoorMapping {
+    pub async fn open_door(&self) -> Result<(), DoorOpenError> {
+        let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|_| DoorOpenError::CannotBindSocket)?;
         let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(true));
         let payload = Payload::new(self.virtual_node, self.pdo, value);
         let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
@@ -195,12 +195,12 @@ impl core::fmt::Display for PdoZeroError {
 }
 impl std::error::Error for PdoZeroError {}
 
-impl TryFrom<RoomMappingData> for RoomMapping {
+impl TryFrom<DoorMappingData> for DoorMapping {
     type Error = PdoZeroError;
 
-    fn try_from(value: RoomMappingData) -> Result<Self, Self::Error> {
+    fn try_from(value: DoorMappingData) -> Result<Self, Self::Error> {
         Ok(Self {
-            room_name: value.room_name,
+            door_name: value.door_name,
             cmi_address: value.cmi_address,
             cmi_port: value.cmi_port.unwrap_or(5422),
             virtual_node: value.virtual_node,
@@ -209,10 +209,10 @@ impl TryFrom<RoomMappingData> for RoomMapping {
     }
 }
 
-/// Data for [RoomMapping] on disk.
+/// Data for [DoorMapping] on disk.
 #[derive(Debug, PartialEq, Eq, Deserialize)]
-struct RoomMappingData {
-    room_name: String,
+struct DoorMappingData {
+    door_name: String,
     cmi_address: Ipv4Addr,
     cmi_port: Option<u16>,
     virtual_node: u8,
