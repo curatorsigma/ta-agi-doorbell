@@ -128,8 +128,8 @@ impl AGIHandler for OpenDoorHandler {
         connection.send_command(Verbose::new(format!("The door {door} is not known."))).await?;
         let cmi_config = self.get_cmi_for_door(door).ok_or(AGIError::ClientSideError("Door is not known.".to_owned()))?;
         // send ON to that CMI
-        info!("Opening Door {}", cmi_config.door_name);
         cmi_config.open_door().await.map_err(|x| AGIError::ClientSideError(x.to_string()))?;
+        info!("Sent CoE packet to open Door {}", cmi_config.door_name);
         Ok(())
     }
 }
