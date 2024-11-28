@@ -1,11 +1,11 @@
 [package]
 name = "ta-agi-doorbell"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 [dependencies]
 async-trait = "0.1.83"
-blazing_agi = "0.3.0"
+blazing_agi = "0.3.1"
 blazing_agi_macros = "0.1.0"
 coe = "0.2.2"
 hex = "0.4.3"

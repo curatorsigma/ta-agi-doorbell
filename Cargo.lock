@@ -54,9 +54,9 @@ dependencies = [
 
 [[package]]
 name = "blazing_agi"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8f2a914e9630b6029079f70e38ba185c31a955d89cbb9b7bfd18456efa3446c"
+checksum = "e4533b250b4ec69d21050d4c54a884df54cf986f78dda3c157049b1f1b5d53de"
 dependencies = [
  "async-trait",
  "blazing_agi_macros",
