@@ -173,9 +173,22 @@ pub struct DoorMapping {
     pdo: u8,
 }
 impl DoorMapping {
+    /// Open this door for a few seconds
     pub async fn open_door(&self) -> Result<(), DoorOpenError> {
         let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|_| DoorOpenError::CannotBindSocket)?;
+        // open the door by sending ON
         let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(true));
+        let payload = Payload::new(self.virtual_node, self.pdo, value);
+        let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
+        let mut buf = [0_u8; 12];
+        packet.try_serialize_into(&mut buf).expect("known packet length");
+        socket.send_to(&buf, format!("{}:{}", self.cmi_address, self.cmi_port)).await?;
+
+        // now wait for 15s and close the door again
+        tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+        // and close the door by sending OFF
+        let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(false));
         let payload = Payload::new(self.virtual_node, self.pdo, value);
         let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
         let mut buf = [0_u8; 12];
