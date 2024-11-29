@@ -120,7 +120,7 @@ impl OpenDoorHandler {
 }
 #[async_trait::async_trait]
 impl AGIHandler for OpenDoorHandler {
-    async fn handle(&self, connection: &mut Connection, request: &AGIRequest) -> Result<(), AGIError> {
+    async fn handle(&self, _: &mut Connection, request: &AGIRequest) -> Result<(), AGIError> {
         debug!("Got new AGI request to the open_door handler.");
         // make sure the door is known
         let door = request.captures.get("door").ok_or(AGIError::ClientSideError("Got no captured door".to_owned()))?;
