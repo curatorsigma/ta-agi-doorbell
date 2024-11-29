@@ -127,19 +127,14 @@ impl TryFrom<CmiConfigData> for CmiConfig {
             door_mappings: value
                 .door_mappings
                 .into_iter()
-                .map(|x| <DoorMappingData as TryInto<DoorMapping>>::try_into(x))
+                .map(<DoorMappingData as TryInto<DoorMapping>>::try_into)
                 .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }
 impl CmiConfig {
     pub fn get_cmi_for_door(&self, name: &str) -> Option<&DoorMapping> {
-        for map in &self.door_mappings {
-            if map.door_name == name {
-                return Some(&map);
-            }
-        }
-        None
+        self.door_mappings.iter().find(|&map| map.door_name == name)
     }
 }
 
