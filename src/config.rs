@@ -1,9 +1,8 @@
 use std::{fs::read_to_string, net::Ipv4Addr, path::Path};
 
 use serde::Deserialize;
-use tokio::net::UdpSocket;
 
-use coe::{COEValue, Packet, Payload};
+use coe::{COEValue, Payload};
 
 #[derive(Debug)]
 pub enum ConfigError {
@@ -30,42 +29,24 @@ impl core::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::Io(x) => {
-                write!(f, "Error reading from file /etc/ta-agi-doorbell/config.toml: {x}")
+                write!(
+                    f,
+                    "Error reading from file /etc/ta-agi-doorbell/config.toml: {x}"
+                )
             }
             Self::Toml(x) => {
                 write!(f, "Error parsing config file as toml: {x}")
             }
             Self::PdoZero => {
-                write!(f, "One of the PDO indices is zero. They need to be one-based.")
+                write!(
+                    f,
+                    "One of the PDO indices is zero. They need to be one-based."
+                )
             }
         }
     }
 }
 impl std::error::Error for ConfigError {}
-
-#[derive(Debug)]
-pub enum DoorOpenError {
-    CannotBindSocket,
-    CannotSendCoe(std::io::Error),
-}
-impl From<std::io::Error> for DoorOpenError {
-    fn from(value: std::io::Error) -> Self {
-        Self::CannotSendCoe(value)
-    }
-}
-impl core::fmt::Display for DoorOpenError {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        match self {
-            Self::CannotBindSocket => {
-                write!(f, "Cannot bind to a udp socket to send packets from")
-            }
-            Self::CannotSendCoe(x) => {
-                write!(f, "Cannot send the complete coe packet: {x}")
-            }
-        }
-    }
-}
-impl std::error::Error for DoorOpenError {}
 
 /// The entire configuration for ta-agi-doorbell
 #[derive(Debug)]
@@ -143,7 +124,11 @@ impl TryFrom<CmiConfigData> for CmiConfig {
 
     fn try_from(value: CmiConfigData) -> Result<Self, Self::Error> {
         Ok(Self {
-            door_mappings: value.door_mappings.into_iter().map(|x| <DoorMappingData as TryInto<DoorMapping>>::try_into(x)).collect::<Result<Vec<_>, _>>()?,
+            door_mappings: value
+                .door_mappings
+                .into_iter()
+                .map(|x| <DoorMappingData as TryInto<DoorMapping>>::try_into(x))
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }
@@ -153,7 +138,7 @@ impl CmiConfig {
             if map.door_name == name {
                 return Some(&map);
             }
-        };
+        }
         None
     }
 }
@@ -173,31 +158,14 @@ pub struct DoorMapping {
     pdo: u8,
 }
 impl DoorMapping {
-    /// Open this door for a few seconds
-    pub async fn open_door(&self) -> Result<(), DoorOpenError> {
-        let socket = UdpSocket::bind("0.0.0.0:0").await.map_err(|_| DoorOpenError::CannotBindSocket)?;
-        // open the door by sending ON
-        let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(true));
-        let payload = Payload::new(self.virtual_node, self.pdo, value);
-        let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
-        let mut buf = [0_u8; 12];
-        packet.try_serialize_into(&mut buf).expect("known packet length");
-        socket.send_to(&buf, format!("{}:{}", self.cmi_address, self.cmi_port)).await?;
+    pub fn cmi_host(&self) -> String {
+        format!("{}:{}", self.cmi_address, self.cmi_port)
+    }
 
-        // now wait for 15s and close the door again
-        tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
-
-        // and close the door by sending OFF
-        let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(false));
-        let payload = Payload::new(self.virtual_node, self.pdo, value);
-        let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
-        let mut buf = [0_u8; 12];
-        packet.try_serialize_into(&mut buf).expect("known packet length");
-        socket.send_to(&buf, format!("{}:{}", self.cmi_address, self.cmi_port)).await?;
-        Ok(())
+    pub fn payload_with_value(&self, value: COEValue) -> Payload {
+        Payload::new(self.virtual_node, self.pdo, value)
     }
 }
-
 
 #[derive(Debug)]
 struct PdoZeroError {}

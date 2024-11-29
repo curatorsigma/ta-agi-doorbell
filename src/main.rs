@@ -1,15 +1,77 @@
-use blazing_agi::{command::{verbose::Verbose, AGIResponse, GetFullVariable}, connection::Connection, handler::AGIHandler, router::Router, serve, AGIError, AGIRequest};
+use blazing_agi::{
+    command::{verbose::Verbose, AGIResponse, GetFullVariable},
+    connection::Connection,
+    handler::AGIHandler,
+    router::Router,
+    serve, AGIError, AGIRequest,
+};
 use blazing_agi_macros::layer_before;
+use coe::{COEValue, Packet};
 use rand::Rng;
 use sha1::{Digest, Sha1};
-use tokio::net::TcpListener;
-use tracing::{debug, info, level_filters::LevelFilter, warn};
+use tokio::net::{TcpListener, UdpSocket};
+use tracing::{debug, info, level_filters::LevelFilter, trace, warn};
 use tracing_subscriber::{fmt::format::FmtSpan, prelude::*, EnvFilter};
 
 mod config;
 use config::{CmiConfig, Config, DoorMapping};
 
+#[derive(Debug)]
+pub enum DoorOpenError {
+    CannotBindSocket,
+    CannotSendCoe(std::io::Error),
+}
+impl From<std::io::Error> for DoorOpenError {
+    fn from(value: std::io::Error) -> Self {
+        Self::CannotSendCoe(value)
+    }
+}
+impl core::fmt::Display for DoorOpenError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::CannotBindSocket => {
+                write!(f, "Cannot bind to a udp socket to send packets from")
+            }
+            Self::CannotSendCoe(x) => {
+                write!(f, "Cannot send the complete coe packet: {x}")
+            }
+        }
+    }
+}
+impl std::error::Error for DoorOpenError {}
 
+/// open the door defined by `mapping` for a few seconds
+async fn open_door(mapping: &DoorMapping) -> Result<(), DoorOpenError> {
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .await
+        .map_err(|_| DoorOpenError::CannotBindSocket)?;
+    trace!("Got UDP socket to open door");
+    // open the door by sending ON
+    let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(true));
+    let payload = mapping.payload_with_value(value);
+    let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
+    let mut buf = [0_u8; 12];
+    packet
+        .try_serialize_into(&mut buf)
+        .expect("known packet length");
+    socket.send_to(&buf, mapping.cmi_host()).await?;
+    info!("Opened door {}. Will stay open for 15s.", mapping.door_name);
+
+    // now wait for 15s and close the door again
+    tokio::time::sleep(tokio::time::Duration::from_secs(15)).await;
+
+    // and close the door by sending OFF
+    let value = COEValue::Digital(coe::DigitalCOEValue::OnOff(false));
+    let payload = mapping.payload_with_value(value);
+    let packet = Packet::try_from_payloads(&[payload]).expect("known good sequence");
+    let mut buf = [0_u8; 12];
+    packet
+        .try_serialize_into(&mut buf)
+        .expect("known packet length");
+    socket.send_to(&buf, mapping.cmi_host()).await?;
+    debug!("Closed door {}.", mapping.door_name);
+    Ok(())
+}
 
 #[derive(Debug, Clone)]
 enum SHA1DigestError {
@@ -108,7 +170,6 @@ impl AGIHandler for SHA1DigestOverAGI {
     }
 }
 
-
 #[derive(Debug)]
 struct OpenDoorHandler {
     config: CmiConfig,
@@ -123,11 +184,18 @@ impl AGIHandler for OpenDoorHandler {
     async fn handle(&self, _: &mut Connection, request: &AGIRequest) -> Result<(), AGIError> {
         debug!("Got new AGI request to the open_door handler.");
         // make sure the door is known
-        let door = request.captures.get("door").ok_or(AGIError::ClientSideError("Got no captured door".to_owned()))?;
+        let door = request
+            .captures
+            .get("door")
+            .ok_or(AGIError::ClientSideError("Got no captured door".to_owned()))?;
         // get the cmi connection used for this door
-        let cmi_config = self.get_cmi_for_door(door).ok_or(AGIError::ClientSideError("Door is not known.".to_owned()))?;
+        let cmi_config = self
+            .get_cmi_for_door(door)
+            .ok_or(AGIError::ClientSideError("Door is not known.".to_owned()))?;
         // send ON to that CMI
-        cmi_config.open_door().await.map_err(|x| AGIError::ClientSideError(x.to_string()))?;
+        open_door(cmi_config)
+            .await
+            .map_err(|x| AGIError::ClientSideError(x.to_string()))?;
         info!("Sent CoE packet to open Door {}", cmi_config.door_name);
         Ok(())
     }
