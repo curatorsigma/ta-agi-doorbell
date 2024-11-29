@@ -202,7 +202,7 @@ impl TryFrom<DoorMappingData> for DoorMapping {
         Ok(Self {
             door_name: value.door_name,
             cmi_address: value.cmi_address,
-            cmi_port: value.cmi_port.unwrap_or(5422),
+            cmi_port: value.cmi_port.unwrap_or(5442),
             virtual_node: value.virtual_node,
             pdo: value.pdo.checked_sub(1).ok_or(PdoZeroError {})?,
         })

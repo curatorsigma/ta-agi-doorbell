@@ -125,7 +125,6 @@ impl AGIHandler for OpenDoorHandler {
         // make sure the door is known
         let door = request.captures.get("door").ok_or(AGIError::ClientSideError("Got no captured door".to_owned()))?;
         // get the cmi connection used for this door
-        connection.send_command(Verbose::new(format!("The door {door} is not known."))).await?;
         let cmi_config = self.get_cmi_for_door(door).ok_or(AGIError::ClientSideError("Door is not known.".to_owned()))?;
         // send ON to that CMI
         cmi_config.open_door().await.map_err(|x| AGIError::ClientSideError(x.to_string()))?;
